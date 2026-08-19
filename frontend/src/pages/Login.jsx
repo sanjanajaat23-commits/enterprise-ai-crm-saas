@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
 export default function Login() {
@@ -8,7 +7,6 @@ export default function Login() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
 
   const submit = async (e) => {
     e.preventDefault()
@@ -20,14 +18,22 @@ export default function Login() {
         res = await api.post('/auth/signup', form)
       } else {
         const body = new URLSearchParams()
-        body.append('username', loginForm.email)
+        body.append('username', loginForm.email.trim())
         body.append('password', loginForm.password)
         res = await api.post('/auth/login', body, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
       }
-      localStorage.setItem('token', res.data.access_token)
-      navigate('/dashboard', { replace: true })
+
+      const token = res.data?.access_token
+      if (!token) throw new Error('The server did not return an access token.')
+      localStorage.setItem('token', token)
+      // Full navigation guarantees the authenticated app starts with a fresh API state.
+      window.location.replace('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Something went wrong. Please try again.')
+      const detail = err.response?.data?.detail
+      if (err.response?.status === 401) setError('Incorrect email or password.')
+      else if (typeof detail === 'string') setError(detail)
+      else if (err.message) setError(err.message)
+      else setError('Unable to reach NovaCRM. Make sure the backend is running on port 8000.')
     } finally {
       setLoading(false)
     }
@@ -41,11 +47,7 @@ export default function Login() {
           <div className="mini-badge">✦ AI-POWERED SALES</div>
           <h1>Turn customer data into your next best action.</h1>
           <p>One workspace for pipeline intelligence, customer context and AI-assisted selling.</p>
-          <div className="proof-grid">
-            <div><strong>24/7</strong><span>AI assistance</span></div>
-            <div><strong>100%</strong><span>Tenant isolated</span></div>
-            <div><strong>Fast</strong><span>Revenue insights</span></div>
-          </div>
+          <div className="proof-grid"><div><strong>24/7</strong><span>AI assistance</span></div><div><strong>100%</strong><span>Tenant isolated</span></div><div><strong>Fast</strong><span>Revenue insights</span></div></div>
         </div>
       </div>
       <div className="auth-panel">
@@ -53,19 +55,10 @@ export default function Login() {
           <div className="eyebrow">WELCOME TO NOVACRM</div>
           <h2>{mode === 'login' ? 'Welcome back' : 'Create your workspace'}</h2>
           <p className="muted">{mode === 'login' ? 'Sign in to your revenue workspace.' : 'Start a private CRM workspace for your team.'}</p>
-
-          <div className="auth-tabs">
-            <button className={mode === 'login' ? 'tab active' : 'tab'} onClick={() => { setMode('login'); setError('') }}>Sign in</button>
-            <button className={mode === 'signup' ? 'tab active' : 'tab'} onClick={() => { setMode('signup'); setError('') }}>Create account</button>
-          </div>
-
+          <div className="auth-tabs"><button type="button" className={mode === 'login' ? 'tab active' : 'tab'} onClick={() => { setMode('login'); setError('') }}>Sign in</button><button type="button" className={mode === 'signup' ? 'tab active' : 'tab'} onClick={() => { setMode('signup'); setError('') }}>Create account</button></div>
           {error && <div className="error-box">{error}</div>}
-
           <form onSubmit={submit} className="auth-form">
-            {mode === 'signup' && <>
-              <label>Company name<input required placeholder="Acme Inc." value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} /></label>
-              <label>Your name<input required placeholder="Sanjana Jaat" value={form.admin_full_name} onChange={e => setForm({ ...form, admin_full_name: e.target.value })} /></label>
-            </>}
+            {mode === 'signup' && <><label>Company name<input required placeholder="Acme Inc." value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} /></label><label>Your name<input required placeholder="Sanjana Jaat" value={form.admin_full_name} onChange={e => setForm({ ...form, admin_full_name: e.target.value })} /></label></>}
             <label>Email<input required type="email" placeholder="you@company.com" value={mode === 'signup' ? form.admin_email : loginForm.email} onChange={e => mode === 'signup' ? setForm({ ...form, admin_email: e.target.value }) : setLoginForm({ ...loginForm, email: e.target.value })} /></label>
             <label>Password<input required type="password" placeholder="••••••••" value={mode === 'signup' ? form.admin_password : loginForm.password} onChange={e => mode === 'signup' ? setForm({ ...form, admin_password: e.target.value }) : setLoginForm({ ...loginForm, password: e.target.value })} /></label>
             <button className="primary-button full-width" type="submit" disabled={loading}>{loading ? 'Working…' : mode === 'login' ? 'Sign in to workspace →' : 'Create workspace →'}</button>
