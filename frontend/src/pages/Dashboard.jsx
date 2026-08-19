@@ -15,9 +15,14 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const [dealsRes, contactsRes] = await Promise.all([api.get('/deals'), api.get('/contacts')])
-      setDeals(dealsRes.data)
-      setContacts(contactsRes.data)
+      setDeals(Array.isArray(dealsRes.data) ? dealsRes.data : [])
+      setContacts(Array.isArray(contactsRes.data) ? contactsRes.data : [])
     } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token')
+        window.location.replace('/login')
+        return
+      }
       setError(err.response?.data?.detail || 'Unable to load workspace data.')
     } finally { setLoading(false) }
   }
@@ -30,8 +35,10 @@ export default function Dashboard() {
       await api.post('/contacts', newContact)
       setNewContact({ name: '', email: '', job_title: '', notes: '' })
       await loadData()
-    } catch (err) { setError(err.response?.data?.detail || 'Unable to create contact.') }
-    finally { setSaving(false) }
+    } catch (err) {
+      if (err.response?.status === 401) { localStorage.removeItem('token'); window.location.replace('/login'); return }
+      setError(err.response?.data?.detail || 'Unable to create contact.')
+    } finally { setSaving(false) }
   }
 
   const metrics = useMemo(() => {
@@ -45,7 +52,7 @@ export default function Dashboard() {
   return (
     <section className="page-content">
       <div className="hero-row">
-        <div><span className="section-kicker">THURSDAY · REVENUE PULSE</span><h2>Know where to focus today.</h2><p>Track your pipeline, contacts and AI-ready customer context from one workspace.</p></div>
+        <div><span className="section-kicker">REVENUE PULSE</span><h2>Know where to focus today.</h2><p>Track your pipeline, contacts and AI-ready customer context from one workspace.</p></div>
         <button className="primary-button" onClick={() => document.getElementById('new-contact')?.scrollIntoView({ behavior: 'smooth' })}>+ Add contact</button>
       </div>
 
