@@ -1,99 +1,221 @@
-# AI CRM SaaS Enterprise v3 — Setup Guide
+# NovaCRM — AI Revenue Intelligence Platform
 
-Stack: **FastAPI + PostgreSQL** (backend) · **React/Vite** (frontend) · **Gemini API** (AI features)
+> A multi-tenant CRM that combines pipeline management with AI lead scoring, sales outreach generation, and a context-aware CRM copilot.
 
-## What's included
-- Multi-tenant data model (each signup = its own `Company`, isolated data)
-- JWT auth (signup/login)
-- Contacts, Leads, Deals CRUD
-- AI features via Gemini:
-  - **Lead scoring** — scores a lead 0–100 with a reason
-  - **Email drafting** — generates a follow-up email for a contact
-  - **Chat assistant** — answers questions about your CRM data
+**Portfolio project · Full-stack · AI engineering · SaaS architecture**
 
----
+[![Backend](https://img.shields.io/badge/backend-FastAPI-0f172a?style=flat-square)](#architecture) [![Frontend](https://img.shields.io/badge/frontend-React%20%2F%20Vite-0f172a?style=flat-square)](#architecture) [![Database](https://img.shields.io/badge/database-PostgreSQL-0f172a?style=flat-square)](#architecture) [![AI](https://img.shields.io/badge/AI-Gemini-0f172a?style=flat-square)](#ai-workspace)
 
-## 1. Get a Gemini API key
-1. Go to https://aistudio.google.com/app/apikey
-2. Click "Create API key"
-3. Copy it — you'll paste it into `backend/.env` in step 3.
+## What this demonstrates
 
-## 2. Set up PostgreSQL
-Easiest with Docker:
-```bash
-docker run --name ai-crm-db -e POSTGRES_USER=crm_user -e POSTGRES_PASSWORD=crm_pass \
-  -e POSTGRES_DB=ai_crm -p 5432:5432 -d postgres:16
+NovaCRM is intentionally built as a **real SaaS-style system**, not a static AI demo. Each customer workspace is isolated by `company_id`, authenticated users access only their tenant's records, and AI features operate on CRM context rather than generic prompts.
+
+### Core capabilities
+
+- **Multi-tenant SaaS** — companies, users, contacts, leads and deals are tenant-scoped.
+- **JWT authentication** — company signup and secure login flow.
+- **Revenue dashboard** — pipeline value, won revenue, open opportunities and customer activity.
+- **AI lead scoring** — Gemini evaluates conversion likelihood and explains the score.
+- **AI outreach** — generates concise, context-aware follow-up emails.
+- **CRM copilot** — ask natural-language questions against the current CRM context.
+- **Production-minded configuration** — environment-based API/database settings and explicit AI error handling.
+- **Responsive product UI** — desktop and mobile layouts with a consistent SaaS design system.
+
+## Product flow
+
+```text
+Customer signup
+      ↓
+Private company workspace
+      ↓
+Contacts + customer context
+      ↓
+Leads + pipeline
+      ↓
+Gemini lead scoring ──→ priority + reasoning
+      ↓
+AI follow-up generation
+      ↓
+CRM Copilot ──→ next-best-action questions
 ```
-(No Docker? Install Postgres locally and create a database called `ai_crm`.)
 
-## 3. Backend setup
+## Architecture
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│                     NovaCRM Web App                     │
+│                 React + Vite + Axios                   │
+└──────────────────────────┬──────────────────────────────┘
+                           │ REST / JWT
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    FastAPI Application                  │
+│  Auth │ Contacts │ Leads │ Deals │ AI │ Tenant Guards  │
+└───────────────┬───────────────────────┬─────────────────┘
+                │                       │
+                ▼                       ▼
+       ┌────────────────┐       ┌────────────────────┐
+       │   PostgreSQL   │       │   Gemini Service   │
+       │ tenant-scoped  │       │ scoring / email /  │
+       │ CRM records    │       │ CRM copilot        │
+       └────────────────┘       └────────────────────┘
+```
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, React Router, Axios |
+| Backend | Python, FastAPI, SQLAlchemy, Pydantic |
+| Database | PostgreSQL |
+| Authentication | JWT + password hashing |
+| AI | Google Gemini API |
+| Migrations | Alembic |
+| API documentation | FastAPI / OpenAPI |
+
+## AI workspace
+
+The AI layer exposes three product features:
+
+1. **Lead scoring** — returns a 0–100 score plus a business explanation.
+2. **Follow-up drafting** — turns CRM/customer context into a sales email.
+3. **CRM copilot** — answers questions using the current workspace's CRM snapshot.
+
+AI provider failures are surfaced as controlled API errors rather than silently returning fabricated business results.
+
+## Security & SaaS design
+
+The database models include a company/tenant boundary, and application queries use the authenticated user's `company_id` to scope CRM records. This gives the project a concrete multi-tenant security story for technical interviews.
+
+For a production deployment, the next security hardening step would be moving browser authentication from `localStorage` to secure, httpOnly cookies plus CSRF protection.
+
+## Run locally
+
+### 1. Clone and enter the project
+
 ```bash
+git clone https://github.com/sanjanajaat23-commits/enterprise-ai-crm-saas.git
+cd enterprise-ai-crm-saas
+```
+
+### 2. PostgreSQL
+
+With Docker:
+
+```bash
+docker run --name novacrm-db \
+  -e POSTGRES_USER=crm_user \
+  -e POSTGRES_PASSWORD=crm_pass \
+  -e POSTGRES_DB=ai_crm \
+  -p 5432:5432 -d postgres:16
+```
+
+### 3. Backend
+
+Windows PowerShell:
+
+```powershell
 cd backend
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-cp .env.example .env
-# Now edit .env and paste your GEMINI_API_KEY, and set SECRET_KEY to a random string
-# You can generate one with: python -c "import secrets; print(secrets.token_hex(32))"
-
-uvicorn app.main:app --reload --port 8000
+Copy-Item .env.example .env
 ```
-Backend is now running at http://localhost:8000. Interactive API docs at http://localhost:8000/docs — good for testing endpoints directly before wiring up the frontend.
 
-## 4. Frontend setup
-In a new terminal:
-```bash
+Set your values in `backend/.env`:
+
+```env
+DATABASE_URL=postgresql://crm_user:crm_pass@localhost:5432/ai_crm
+SECRET_KEY=replace-with-a-long-random-secret
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.0-flash
+FRONTEND_ORIGINS=http://localhost:5173
+```
+
+Start the API:
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+API docs: `http://127.0.0.1:8000/docs`
+
+### 4. Frontend
+
+In a second terminal:
+
+```powershell
 cd frontend
 npm install
+```
+
+Create `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+Start:
+
+```powershell
 npm run dev
 ```
-Frontend runs at http://localhost:5173.
 
-## 5. Use it
-1. Open http://localhost:5173 → "Sign up company" → creates your tenant + admin user
-2. Go to **Dashboard** → add a few contacts (put realistic notes in the notes field — this becomes AI context)
-3. Go to **Leads** → create a lead for a contact, paste in some interaction notes
-4. Click **"Score with Gemini"** → watch it call the real Gemini API and return a score + reasoning
-5. Click **"Draft follow-up email"** → Gemini writes an email using that contact's notes
-6. Go to **AI Assistant** → ask things like *"Which leads should I prioritize?"* — it answers using your actual CRM data as context
+Open `http://localhost:5173`.
 
----
+### 5. Demo workflow
 
-## Architecture notes (why it's built this way)
-- **Multi-tenancy**: every table has a `company_id`. Every query filters by the logged-in user's `company_id`, so tenants never see each other's data. This is the standard pattern for CRM/SaaS at this stage — you can move to schema-per-tenant or DB-per-tenant later if you need harder isolation for enterprise contracts.
-- **JWT auth**: stateless, works well behind a load balancer. Token is stored in `localStorage` on the frontend for simplicity — for production, consider httpOnly cookies to reduce XSS risk.
-- **Gemini calls are centralized** in `backend/app/gemini_service.py` — one place to change models, add retries, or swap providers later.
-- **`Base.metadata.create_all`** auto-creates tables for local dev. For production, replace with **Alembic migrations** (the package is already in `requirements.txt`) so schema changes are versioned and reversible.
+1. Create a company workspace.
+2. Add 3–5 realistic customer profiles and notes.
+3. Create leads with buying signals and interaction context.
+4. Run **Score with AI** on the leads.
+5. Generate a follow-up email.
+6. Open **AI Workspace** and ask which opportunities deserve attention.
 
-## Next steps to make this production/enterprise-ready
-1. **Migrations**: `alembic init alembic`, then generate a migration instead of relying on `create_all`.
-2. **Role-based access control**: you have `is_admin` on `User` already — add permission checks (e.g. only admins can invite/remove users).
-3. **Rate limiting & retries** around Gemini calls (the SDK can throw on quota/network errors — wrap in try/except and return a friendly error).
-4. **Background jobs**: for bulk lead scoring, use a task queue (Celery/RQ) instead of blocking the request.
-5. **Deployment**: containerize both services (Dockerfiles), deploy backend to Render/Fly.io/AWS, frontend to Vercel/Netlify, Postgres to a managed provider (RDS, Neon, Supabase).
-6. **Billing**: integrate Stripe for subscription tiers if you're monetizing as SaaS.
-7. **Audit logging**: log AI calls (who asked what, what was returned) — useful for enterprise trust/compliance asks.
+## Repository structure
 
-## Project structure
-```
-ai-crm/
+```text
+enterprise-ai-crm-saas/
 ├── backend/
 │   ├── app/
-│   │   ├── routers/        # auth, contacts, leads, deals, ai
-│   │   ├── models.py       # SQLAlchemy models
-│   │   ├── schemas.py      # Pydantic request/response models
+│   │   ├── routers/
+│   │   ├── models.py
+│   │   ├── schemas.py
 │   │   ├── gemini_service.py
-│   │   ├── security.py     # JWT + password hashing
+│   │   ├── security.py
 │   │   ├── database.py
 │   │   ├── config.py
 │   │   └── main.py
+│   ├── alembic/
 │   ├── requirements.txt
 │   └── .env.example
-└── frontend/
-    ├── src/
-    │   ├── pages/           # Login, Dashboard, Leads, AIAssistant
-    │   ├── api.js
-    │   └── App.jsx
-    └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   ├── api.js
+│   │   ├── App.jsx
+│   │   └── index.css
+│   └── package.json
+└── README.md
 ```
+
+## Engineering roadmap
+
+- [x] Multi-tenant data model
+- [x] JWT authentication
+- [x] AI lead scoring
+- [x] AI outreach generation
+- [x] CRM AI assistant
+- [x] Responsive SaaS UI
+- [x] Environment-based configuration
+- [x] Explicit AI error handling
+- [ ] Automated test suite + CI expansion
+- [ ] Production deployment
+- [ ] Audit logging / observability
+- [ ] Role-based team administration
+
+## Why this project exists
+
+NovaCRM was built to explore a practical question: **how can AI be embedded into everyday revenue workflows without losing the structure, permissions and context of a real SaaS product?**
+
+The project combines full-stack engineering, API design, relational data modeling, authentication, tenant isolation and applied LLM integration in one deployable product concept.
