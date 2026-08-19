@@ -93,10 +93,31 @@ def chat_assistant(
         .all()
     )
 
+    # Include the related contact record in the assistant context. Without this,
+    # the copilot only knows "Lead #2" and cannot personalize responses by name.
+    lead_contacts = {}
+    if leads:
+        contact_ids = {lead.contact_id for lead in leads if lead.contact_id}
+        contacts = (
+            db.query(Contact)
+            .filter(
+                Contact.company_id == current_user.company_id,
+                Contact.id.in_(contact_ids),
+            )
+            .all()
+        )
+        lead_contacts = {contact.id: contact for contact in contacts}
+
     lines = ["LEADS:"]
     for lead in leads:
+        contact = lead_contacts.get(lead.contact_id)
+        contact_name = contact.name if contact else "Unknown contact"
+        contact_title = contact.job_title if contact else ""
+        contact_email = contact.email if contact else ""
         lines.append(
-            f"- Lead #{lead.id} status={lead.status} ai_score={lead.ai_score} source={lead.source}"
+            f"- Lead #{lead.id} contact={contact_name} title={contact_title} "
+            f"email={contact_email} status={lead.status} ai_score={lead.ai_score} "
+            f"source={lead.source} context={lead.raw_context or ''}"
         )
     lines.append("DEALS:")
     for deal in deals:
