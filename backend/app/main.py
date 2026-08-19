@@ -1,12 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
 from app.config import settings
 from app.routers import auth, contacts, leads, deals, ai
-
-# Creates tables if they don't exist yet (fine for dev; use Alembic migrations in production)
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI CRM SaaS Enterprise v3")
 
