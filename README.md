@@ -1,25 +1,27 @@
 # NovaCRM — AI Revenue Intelligence Platform
 
-> A multi-tenant CRM that combines pipeline management with AI lead scoring, sales outreach generation, and a context-aware CRM copilot.
+> A multi-tenant CRM that combines pipeline management with AI lead scoring, sales outreach generation, and a context-aware revenue copilot.
 
 **Portfolio project · Full-stack · AI engineering · SaaS architecture**
 
 [![Backend](https://img.shields.io/badge/backend-FastAPI-0f172a?style=flat-square)](#architecture) [![Frontend](https://img.shields.io/badge/frontend-React%20%2F%20Vite-0f172a?style=flat-square)](#architecture) [![Database](https://img.shields.io/badge/database-PostgreSQL-0f172a?style=flat-square)](#architecture) [![AI](https://img.shields.io/badge/AI-Gemini-0f172a?style=flat-square)](#ai-workspace)
 
-## What this demonstrates
+## Overview
 
-NovaCRM is intentionally built as a **real SaaS-style system**, not a static AI demo. Each customer workspace is isolated by `company_id`, authenticated users access only their tenant's records, and AI features operate on CRM context rather than generic prompts.
+NovaCRM is a SaaS-style CRM built around a simple idea: **AI should understand the sales workflow, not sit beside it as a generic chatbot.**
 
-### Core capabilities
+Each company gets an isolated workspace. Users manage contacts, leads and opportunities, then use AI to score buying intent, generate outreach and ask questions about the current pipeline.
+
+## Core capabilities
 
 - **Multi-tenant SaaS** — companies, users, contacts, leads and deals are tenant-scoped.
 - **JWT authentication** — company signup and secure login flow.
 - **Revenue dashboard** — pipeline value, won revenue, open opportunities and customer activity.
 - **AI lead scoring** — Gemini evaluates conversion likelihood and explains the score.
 - **AI outreach** — generates concise, context-aware follow-up emails.
-- **CRM copilot** — ask natural-language questions against the current CRM context.
-- **Production-minded configuration** — environment-based API/database settings and explicit AI error handling.
-- **Responsive product UI** — desktop and mobile layouts with a consistent SaaS design system.
+- **Revenue copilot** — answers natural-language questions against the current CRM context.
+- **Production-minded configuration** — environment-based API/database settings and controlled AI errors.
+- **Responsive product UI** — consistent SaaS design across desktop and mobile layouts.
 
 ## Product flow
 
@@ -36,7 +38,7 @@ Gemini lead scoring ──→ priority + reasoning
       ↓
 AI follow-up generation
       ↓
-CRM Copilot ──→ next-best-action questions
+Revenue Copilot ──→ next-best-action questions
 ```
 
 ## Architecture
@@ -57,7 +59,7 @@ CRM Copilot ──→ next-best-action questions
        ┌────────────────┐       ┌────────────────────┐
        │   PostgreSQL   │       │   Gemini Service   │
        │ tenant-scoped  │       │ scoring / email /  │
-       │ CRM records    │       │ CRM copilot        │
+       │ CRM records    │       │ revenue copilot    │
        └────────────────┘       └────────────────────┘
 ```
 
@@ -67,7 +69,7 @@ CRM Copilot ──→ next-best-action questions
 |---|---|
 | Frontend | React 18, Vite, React Router, Axios |
 | Backend | Python, FastAPI, SQLAlchemy, Pydantic |
-| Database | PostgreSQL |
+| Database | PostgreSQL-compatible relational architecture |
 | Authentication | JWT + password hashing |
 | AI | Google Gemini API |
 | Migrations | Alembic |
@@ -75,44 +77,32 @@ CRM Copilot ──→ next-best-action questions
 
 ## AI workspace
 
-The AI layer exposes three product features:
+Nova exposes three AI workflows:
 
-1. **Lead scoring** — returns a 0–100 score plus a business explanation.
-2. **Follow-up drafting** — turns CRM/customer context into a sales email.
-3. **CRM copilot** — answers questions using the current workspace's CRM snapshot.
+1. **Lead scoring** — returns a validated 0–100 score plus business reasoning.
+2. **Follow-up drafting** — turns contact and CRM context into concise sales outreach.
+3. **Revenue copilot** — answers questions using the current workspace's CRM snapshot.
+
+The copilot receives related contact identity and CRM context, so user-facing answers can reference people by name instead of internal database IDs.
 
 AI provider failures are surfaced as controlled API errors rather than silently returning fabricated business results.
 
 ## Security & SaaS design
 
-The database models include a company/tenant boundary, and application queries use the authenticated user's `company_id` to scope CRM records. This gives the project a concrete multi-tenant security story for technical interviews.
+Application queries scope CRM records to the authenticated user's `company_id`, giving the project a concrete multi-tenant isolation story.
 
-For a production deployment, the next security hardening step would be moving browser authentication from `localStorage` to secure, httpOnly cookies plus CSRF protection.
+For a production deployment, the next authentication hardening step would be moving browser authentication from `localStorage` to secure, httpOnly cookies plus CSRF protection.
 
 ## Run locally
 
-### 1. Clone and enter the project
+### 1. Clone
 
 ```bash
 git clone https://github.com/sanjanajaat23-commits/enterprise-ai-crm-saas.git
 cd enterprise-ai-crm-saas
 ```
 
-### 2. PostgreSQL
-
-With Docker:
-
-```bash
-docker run --name novacrm-db \
-  -e POSTGRES_USER=crm_user \
-  -e POSTGRES_PASSWORD=crm_pass \
-  -e POSTGRES_DB=ai_crm \
-  -p 5432:5432 -d postgres:16
-```
-
-### 3. Backend
-
-Windows PowerShell:
+### 2. Backend
 
 ```powershell
 cd backend
@@ -125,52 +115,51 @@ Copy-Item .env.example .env
 Set your values in `backend/.env`:
 
 ```env
-DATABASE_URL=postgresql://crm_user:crm_pass@localhost:5432/ai_crm
+DATABASE_URL=your-database-url
 SECRET_KEY=replace-with-a-long-random-secret
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=your-supported-gemini-model
 FRONTEND_ORIGINS=http://localhost:5173
 ```
 
 Start the API:
 
 ```powershell
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 API docs: `http://127.0.0.1:8000/docs`
 
-### 4. Frontend
+### 3. Frontend
 
 In a second terminal:
 
 ```powershell
 cd frontend
 npm install
-```
-
-Create `frontend/.env`:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-Start:
-
-```powershell
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
 
-### 5. Demo workflow
+## Demo workflow
 
 1. Create a company workspace.
-2. Add 3–5 realistic customer profiles and notes.
+2. Add realistic customer profiles and notes.
 3. Create leads with buying signals and interaction context.
-4. Run **Score with AI** on the leads.
-5. Generate a follow-up email.
+4. Run **Score with AI**.
+5. Generate a personalized follow-up.
 6. Open **AI Workspace** and ask which opportunities deserve attention.
+
+## Screenshots
+
+The final demo captures highlight:
+
+- Revenue Overview
+- AI Lead Scoring
+- Revenue Copilot
+- Personalized AI Follow-up
+- Customer Context
 
 ## Repository structure
 
@@ -216,6 +205,6 @@ enterprise-ai-crm-saas/
 
 ## Why this project exists
 
-NovaCRM was built to explore a practical question: **how can AI be embedded into everyday revenue workflows without losing the structure, permissions and context of a real SaaS product?**
+NovaCRM explores a practical engineering question: **how can AI be embedded into everyday revenue workflows without losing the structure, permissions and context of a real SaaS product?**
 
-The project combines full-stack engineering, API design, relational data modeling, authentication, tenant isolation and applied LLM integration in one deployable product concept.
+The project brings together full-stack engineering, REST API design, relational data modeling, authentication, tenant isolation and applied LLM integration in one product concept.
