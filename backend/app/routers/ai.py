@@ -10,6 +10,10 @@ from app import gemini_service
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
+def _ai_error(exc: RuntimeError) -> HTTPException:
+    return HTTPException(status_code=502, detail=str(exc))
+
+
 @router.post("/score-lead")
 def score_lead(
     payload: ScoreLeadRequest,
@@ -24,10 +28,19 @@ def score_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    contact = db.query(Contact).filter(Contact.id == lead.contact_id).first()
-    contact_info = f"Name: {contact.name}, Title: {contact.job_title}, Email: {contact.email}"
+    contact = (
+        db.query(Contact)
+        .filter(Contact.id == lead.contact_id, Contact.company_id == current_user.company_id)
+        .first()
+    )
+    if not contact:
+        raise HTTPException(status_code=404, detail="Lead contact not found")
 
-    result = gemini_service.score_lead(contact_info, lead.raw_context or "")
+    contact_info = f"Name: {contact.name}, Title: {contact.job_title}, Email: {contact.email}"
+    try:
+        result = gemini_service.score_lead(contact_info, lead.raw_context or "")
+    except RuntimeError as exc:
+        raise _ai_error(exc) from exc
 
     lead.ai_score = result["score"]
     lead.ai_score_reason = result["reason"]
@@ -51,8 +64,13 @@ def draft_email(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
 
-    context = contact.notes or ""
-    email_body = gemini_service.draft_email(contact.name, payload.goal, payload.tone, context)
+    try:
+        email_body = gemini_service.draft_email(
+            contact.name, payload.goal, payload.tone, contact.notes or ""
+        )
+    except RuntimeError as exc:
+        raise _ai_error(exc) from exc
+
     return {"contact_id": contact.id, "email_body": email_body}
 
 
@@ -62,7 +80,6 @@ def chat_assistant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Build a compact snapshot of this company's CRM data as context.
     leads = (
         db.query(Lead)
         .filter(Lead.company_id == current_user.company_id)
@@ -76,13 +93,41 @@ def chat_assistant(
         .all()
     )
 
-    lines = ["LEADS:"]
-    for l in leads:
-        lines.append(f"- Lead #{l.id} status={l.status} ai_score={l.ai_score} source={l.source}")
-    lines.append("DEALS:")
-    for d in deals:
-        lines.append(f"- Deal '{d.title}' stage={d.stage.value if hasattr(d.stage,'value') else d.stage} value=${d.value}")
+    # Include the related contact record in the assistant context. Without this,
+    # the copilot only knows "Lead #2" and cannot personalize responses by name.
+    lead_contacts = {}
+    if leads:
+        contact_ids = {lead.contact_id for lead in leads if lead.contact_id}
+        contacts = (
+            db.query(Contact)
+            .filter(
+                Contact.company_id == current_user.company_id,
+                Contact.id.in_(contact_ids),
+            )
+            .all()
+        )
+        lead_contacts = {contact.id: contact for contact in contacts}
 
-    context = "\n".join(lines)
-    answer = gemini_service.chat_assistant(payload.question, context)
+    lines = ["LEADS:"]
+    for lead in leads:
+        contact = lead_contacts.get(lead.contact_id)
+        contact_name = contact.name if contact else "Unknown contact"
+        contact_title = contact.job_title if contact else ""
+        contact_email = contact.email if contact else ""
+        lines.append(
+            f"- Lead #{lead.id} contact={contact_name} title={contact_title} "
+            f"email={contact_email} status={lead.status} ai_score={lead.ai_score} "
+            f"source={lead.source} context={lead.raw_context or ''}"
+        )
+    lines.append("DEALS:")
+    for deal in deals:
+        lines.append(
+            f"- Deal '{deal.title}' stage={deal.stage.value if hasattr(deal.stage, 'value') else deal.stage} value=${deal.value}"
+        )
+
+    try:
+        answer = gemini_service.chat_assistant(payload.question, "\n".join(lines))
+    except RuntimeError as exc:
+        raise _ai_error(exc) from exc
+
     return {"answer": answer}

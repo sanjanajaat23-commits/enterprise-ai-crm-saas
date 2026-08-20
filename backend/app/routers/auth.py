@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User, Company
-from app.schemas import CompanySignup, Token
+from app.schemas import CompanySignup, LoginRequest, Token
 from app.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -18,7 +17,7 @@ def signup(payload: CompanySignup, db: Session = Depends(get_db)):
 
     company = Company(name=payload.company_name)
     db.add(company)
-    db.flush()  # get company.id before commit
+    db.flush()
 
     admin = User(
         company_id=company.id,
@@ -36,10 +35,11 @@ def signup(payload: CompanySignup, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate with a normal JSON payload for a predictable frontend API contract."""
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     token = create_access_token({"sub": str(user.id)})
     return Token(access_token=token)
